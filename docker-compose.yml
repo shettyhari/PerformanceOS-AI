@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: pmos-db
+    restart: always
+    environment:
+      POSTGRES_USER: pmos_admin
+      POSTGRES_PASSWORD: pmos_secure_password
+      POSTGRES_DB: pmos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pmos_admin -d pmos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Cache & Message Queue
+  redis:
+    image: redis:7-alpine
+    container_name: pmos-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Next.js Web Dashboard Portal
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pmos-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://pmos_admin:pmos_secure_password@db:5432/pmos_db?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: pmos-session-key-must-be-long-32chars-secret
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ENCRYPTION_SECRET: pmos-credential-vault-key-32chars
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. BullMQ Sync Job Worker
+  sync-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pmos-sync-worker
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://pmos_admin:pmos_secure_password@db:5432/pmos_db?schema=public
+      REDIS_URL: redis://redis:6379
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ENCRYPTION_SECRET: pmos-credential-vault-key-32chars
+    # Override CMD to execute ts-worker direct loader
+    entrypoint: ["npx", "tsx", "workers/sync-worker.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 5. Cron Scheduler Loop
+  cron-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pmos-cron-scheduler
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://pmos_admin:pmos_secure_password@db:5432/pmos_db?schema=public
+      REDIS_URL: redis://redis:6379
+    # Override CMD to execute the cron scheduler loader
+    entrypoint: ["npx", "tsx", "workers/scheduler.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
