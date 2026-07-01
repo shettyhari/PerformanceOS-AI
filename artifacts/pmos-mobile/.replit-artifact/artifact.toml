@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "PerformanceOS AI Mobile"
+version = "1.0.0"
+id = "artifacts/pmos-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 22891
+
+[services.development]
+run = "pnpm --filter @workspace/pmos-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pmos-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/pmos-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22891"
+BASE_PATH = "/mobile/"

@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "EY9PiWtGTcVi3xDrctziq"
+uri = "file://artifacts/pmos-mobile/assets/images/icon.png"
+type = "image"
+title = "pmos mobile app icon"

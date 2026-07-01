@@ -71,6 +71,7 @@ async function getOrProvisionUser(clerkUserId: string, clerkEmail: string, clerk
   const [user] = await db.insert(usersTable).values({
     clerkId: clerkUserId,
     email: clerkEmail || `${clerkUserId}@clerk.local`,
+    passwordHash: "",
     name: clerkName || "User",
     orgId: org.id,
     role: "OWNER",
