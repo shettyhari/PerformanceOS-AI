@@ -1,19 +1,13 @@
 import { Router } from "express";
 import { db, campaignMetricsTable, windsorConnectionsTable } from "@workspace/db";
 import { eq, desc, sum, avg } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
-function requireAuth(req: any, res: any, next: any) {
-  if (!(req.session as any).user) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-  next();
-}
-
 router.get("/summary", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
 
     const connection = await db.select()
       .from(windsorConnectionsTable)

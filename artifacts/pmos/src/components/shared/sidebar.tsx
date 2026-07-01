@@ -5,12 +5,11 @@ import {
   LayoutDashboard, Megaphone, BarChart3, GitMerge, FileSpreadsheet,
   Sparkles, Bell, Link2, Users, Settings, ChevronLeft, ChevronRight, LogOut
 } from "lucide-react";
+import { useClerk } from "@clerk/react";
 import { useSidebarStore } from "@/store/sidebar-store";
-import { logout } from "@/lib/auth";
-import type { SessionUser } from "@/lib/auth";
 
 interface SidebarProps {
-  user: Partial<SessionUser>;
+  user: Partial<{ name: string; email: string; orgName: string; role: string }>;
 }
 
 interface NavItem {
@@ -57,10 +56,10 @@ const menuGroups: NavGroup[] = [
 export function Sidebar({ user }: SidebarProps) {
   const [location] = useLocation();
   const { isCollapsed, toggleSidebar } = useSidebarStore();
+  const { signOut } = useClerk();
 
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/login";
+  const handleLogout = () => {
+    signOut({ redirectUrl: "/" });
   };
 
   const isActive = (href: string, exact?: boolean) => {

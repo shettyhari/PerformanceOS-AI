@@ -1,15 +1,9 @@
 import { Router } from "express";
 import { db, alertsTable, campaignMetricsTable, windsorConnectionsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
-
-function requireAuth(req: any, res: any, next: any) {
-  if (!(req.session as any).user) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-  next();
-}
 
 async function checkAndCreateAlerts(orgId: string) {
   const metrics = await db.select()
@@ -64,7 +58,7 @@ async function checkAndCreateAlerts(orgId: string) {
 
 router.get("/", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
 
     const connection = await db.select()
       .from(windsorConnectionsTable)
@@ -91,7 +85,7 @@ router.get("/", requireAuth, async (req: any, res) => {
 
 router.post("/:id/resolve", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
     const { id } = req.params;
 
     const [alert] = await db.select().from(alertsTable)

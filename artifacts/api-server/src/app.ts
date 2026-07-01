@@ -1,7 +1,9 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import session from "express-session";
+import { clerkMiddleware } from "@clerk/express";
+import { publishableKeyFromHost } from "@clerk/shared/keys";
+import { CLERK_PROXY_PATH, clerkProxyMiddleware, getClerkProxyHost } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import authRouter from "./routes/auth";
 import dashboardRouter from "./routes/dashboard";
@@ -33,6 +35,8 @@ app.use(
   }),
 );
 
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
 app.use(cors({
   origin: true,
   credentials: true,
@@ -40,25 +44,14 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const sessionSecret = process.env.SESSION_SECRET;
-if (!sessionSecret) {
-  if (process.env.NODE_ENV === "production") {
-    logger.error("SESSION_SECRET environment variable is required in production");
-    process.exit(1);
-  } else {
-    logger.warn("SESSION_SECRET not set — using insecure dev default. Set it before deploying.");
-  }
-}
-app.use(session({
-  secret: sessionSecret || "pmos-dev-secret-do-not-use-in-production",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  },
-}));
+app.use(
+  clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? "",
+      process.env.CLERK_PUBLISHABLE_KEY,
+    ),
+  })),
+);
 
 app.use("/api", router);
 app.use("/api/auth", authRouter);

@@ -14,8 +14,9 @@ export const organizationsTable = pgTable("organizations", {
 
 export const usersTable = pgTable("users", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  clerkId: text("clerk_id").unique(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash").notNull().default(""),
   name: text("name").notNull(),
   orgId: text("org_id").notNull().references(() => organizationsTable.id),
   role: roleEnum("role").notNull().default("OWNER"),

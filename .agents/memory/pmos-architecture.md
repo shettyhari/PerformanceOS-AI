@@ -1,39 +1,36 @@
 ---
 name: PerformanceOS AI architecture
-description: Key non-obvious decisions for the pmos marketing analytics dashboard migration
+description: Key non-obvious decisions for the pmos marketing analytics dashboard
 ---
 
-## Session Auth
-- Uses `express-session` + `bcryptjs` (NOT JWT/NextAuth)
-- Session stored in-memory — lost on API server restart (acceptable for dev)
-- Vite proxy must forward `/api` to API server port (8080) for session cookies to work in browser
-- All fetch calls need `credentials: "include"`
+## Auth — Clerk (not session/bcrypt)
+- Auth is Replit-managed Clerk; provisioned via `setupClerkWhitelabelAuth()`
+- Google SSO is enabled by default; other providers managed from the Auth pane in the Replit toolbar
+- `clerkMiddleware` + `clerkProxyMiddleware` mounted in `app.ts`; must come before `express.json()`
+- `requireAuth` in `artifacts/api-server/src/middlewares/requireAuth.ts` uses `getAuth()` from `@clerk/express`
+- JIT provisioning: first API call with a new Clerk user creates the org + user record automatically
+- `clerk_id` column added to `users` table via SQL (not drizzle push, since TTY issue)
+- Frontend: `ClerkProvider` wraps routes in `App.tsx`; `publishableKeyFromHost` resolves key by hostname
 
-**Why:** migrated from Next.js/NextAuth; chose session cookies as simpler pattern without third-party auth dependency.
+**Why:** migrated from custom session/bcrypt because user needed Google SSO. Clerk handles all auth UX.
 
-**How to apply:** If sessions stop working, check that: (1) vite proxy is pointing to correct API port, (2) `credentials: "include"` is on all fetches, (3) API server CORS has `credentials: true` and `origin: true`.
+**How to apply:** If 401 errors appear, check that `clerkMiddleware` is mounted before routes and `requireAuth` is calling `getAuth(req)` correctly. Web auth is cookie-based — no Bearer tokens needed.
 
 ## Windsor.ai Integration
 - Real Windsor.ai API not called — validates key length ≥ 8 chars only
 - On first sync, generates 30 days × 8 campaigns = 240 rows of mock campaign data
-- Subsequent syncs skip data generation (idempotent)
-- API key stored encrypted (AES-256-CBC) using `ENCRYPTION_KEY` env var
+- Disconnect must delete `sync_logs` before `windsor_connections` (FK constraint)
 
 **Why:** Windsor.ai requires paid plan; mock data lets the full app work without real credentials.
 
 ## Athena AI Chat
-- Uses keyword pattern matching on real DB data (no LLM/external API)
-- Responds to: roas, spend/budget, conversion, meta/facebook, google, waste/inefficient
-- Falls back to summary stats if no keyword matches
-- Conversation history stored in DB (conversations + messages tables)
+- Keyword pattern matching on real DB data (no LLM)
+- Conversations + messages stored in DB
 
-**Why:** No AI integration configured; rule-based responses still feel useful with real data context.
+## Vite Proxy
+- `/api` → `http://localhost:${API_PORT || 8080}` in vite.config.ts
+- Critical: without it, browser `/api` calls never reach Express
 
-## Vite Proxy Config
-- `/api` → `http://localhost:${API_PORT || 8080}` in vite.config.ts server.proxy
-- This is critical — without it, browser `/api` calls never reach the Express server
-
-## Data Flow
-- Campaign metrics table grows by 240 rows per sync
-- Dashboard summary computed on-the-fly from DB (no cache)
-- Alerts auto-generated on every GET /api/alerts call if Windsor is connected
+## DB schema evolution
+- `users.clerk_id` added via raw SQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS clerk_id TEXT`
+- Drizzle push fails in non-TTY environments when existing rows need unique constraint; use raw SQL instead

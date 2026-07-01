@@ -1,15 +1,9 @@
 import { Router } from "express";
 import { db, conversationsTable, messagesTable, campaignMetricsTable, windsorConnectionsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
-
-function requireAuth(req: any, res: any, next: any) {
-  if (!(req.session as any).user) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-  next();
-}
 
 async function generateAthenaResponse(prompt: string, orgId: string): Promise<string> {
   const metrics = await db.select()
@@ -75,7 +69,7 @@ async function generateAthenaResponse(prompt: string, orgId: string): Promise<st
 
 router.get("/conversations", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
     const conversations = await db.select()
       .from(conversationsTable)
       .where(eq(conversationsTable.orgId, orgId));
@@ -93,7 +87,7 @@ router.get("/conversations", requireAuth, async (req: any, res) => {
 
 router.post("/conversations", requireAuth, async (req: any, res) => {
   try {
-    const { orgId, id: userId } = (req.session as any).user;
+    const { orgId, id: userId } = req.dbUser;
     const { title } = req.body;
 
     const [conversation] = await db.insert(conversationsTable)
@@ -113,7 +107,7 @@ router.post("/conversations", requireAuth, async (req: any, res) => {
 
 router.get("/conversations/:id/messages", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
     const { id } = req.params;
 
     const [convo] = await db.select().from(conversationsTable)
@@ -140,7 +134,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req: any, res) => 
 
 router.post("/conversations/:id/messages", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
     const { id } = req.params;
     const { content } = req.body;
 

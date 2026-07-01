@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, windsorConnectionsTable, syncLogsTable, campaignMetricsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
@@ -30,13 +31,6 @@ function decrypt(text: string): string {
   let decrypted = decipher.update(encrypted, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
-}
-
-function requireAuth(req: any, res: any, next: any) {
-  if (!(req.session as any).user) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-  next();
 }
 
 async function generateMockCampaignData(orgId: string): Promise<number> {
