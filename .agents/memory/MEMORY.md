@@ -1,0 +1,1 @@
+- [PerformanceOS AI architecture](pmos-architecture.md) — session auth, Windsor mock data, Athena keyword AI, Vite proxy to port 8080

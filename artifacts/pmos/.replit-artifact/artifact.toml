@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "PerformanceOS AI"
+version = "1.0.0"
+id = "artifacts/pmos"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22055
+
+[services.development]
+run = "pnpm --filter @workspace/pmos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pmos", "run", "build" ]
+publicDir = "artifacts/pmos/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22055"
+BASE_PATH = "/"
