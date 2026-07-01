@@ -87,7 +87,34 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-8 text-center text-xs text-neutral-500 font-light">
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/[0.04]" />
+            </div>
+            <div className="relative flex justify-center text-[11px] text-neutral-600 uppercase tracking-widest">
+              <span className="bg-[#050508] px-3 font-light">or continue with</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { name: "Google", icon: "G" },
+              { name: "LinkedIn", icon: "in" },
+              { name: "Facebook", icon: "f" },
+            ].map((provider) => (
+              <button
+                key={provider.name}
+                type="button"
+                onClick={() => setError(`${provider.name} SSO is not yet configured. Use email/password login.`)}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition duration-200 text-xs font-medium text-neutral-400 hover:text-white cursor-pointer"
+              >
+                <span className="font-bold text-[11px]">{provider.icon}</span>
+                <span className="hidden sm:inline">{provider.name}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 text-center text-xs text-neutral-500 font-light">
             Don't have an account?{" "}
             <Link href="/register" className="text-purple-400 hover:text-purple-300 transition font-normal">Create a workspace</Link>
           </div>
