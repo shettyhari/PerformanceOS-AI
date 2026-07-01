@@ -4,10 +4,17 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
 const router = Router();
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default-key-32-bytes-long-padding";
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("ENCRYPTION_KEY environment variable is required in production");
+  }
+}
+const _encKey = ENCRYPTION_KEY || "dev-encryption-key-not-for-prod!";
 
 function encrypt(text: string): string {
-  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+  const key = Buffer.from(_encKey.padEnd(32).slice(0, 32));
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
   let encrypted = cipher.update(text, "utf8", "hex");
@@ -17,7 +24,7 @@ function encrypt(text: string): string {
 
 function decrypt(text: string): string {
   const [ivHex, encrypted] = text.split(":");
-  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+  const key = Buffer.from(_encKey.padEnd(32).slice(0, 32));
   const iv = Buffer.from(ivHex, "hex");
   const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
   let decrypted = decipher.update(encrypted, "hex", "utf8");
@@ -168,8 +175,17 @@ router.delete("/windsor", requireAuth, async (req: any, res) => {
   try {
     const { orgId } = (req.session as any).user;
 
-    await db.delete(windsorConnectionsTable)
-      .where(eq(windsorConnectionsTable.orgId, orgId));
+    const [connection] = await db.select()
+      .from(windsorConnectionsTable)
+      .where(eq(windsorConnectionsTable.orgId, orgId))
+      .limit(1);
+
+    if (connection) {
+      await db.delete(syncLogsTable)
+        .where(eq(syncLogsTable.connectionId, connection.id));
+      await db.delete(windsorConnectionsTable)
+        .where(eq(windsorConnectionsTable.orgId, orgId));
+    }
 
     return res.json({ success: true });
   } catch (err: any) {

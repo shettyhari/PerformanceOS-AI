@@ -40,9 +40,17 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const sessionSecret = process.env.SESSION_SECRET || "pmos-secret-key-change-in-production";
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  if (process.env.NODE_ENV === "production") {
+    logger.error("SESSION_SECRET environment variable is required in production");
+    process.exit(1);
+  } else {
+    logger.warn("SESSION_SECRET not set — using insecure dev default. Set it before deploying.");
+  }
+}
 app.use(session({
-  secret: sessionSecret,
+  secret: sessionSecret || "pmos-dev-secret-do-not-use-in-production",
   resave: false,
   saveUninitialized: false,
   cookie: {
