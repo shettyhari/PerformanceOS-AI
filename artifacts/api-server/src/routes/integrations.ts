@@ -86,7 +86,7 @@ async function generateMockCampaignData(orgId: string): Promise<number> {
 
 router.get("/windsor", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
 
     const [connection] = await db.select()
       .from(windsorConnectionsTable)
@@ -122,7 +122,7 @@ router.get("/windsor", requireAuth, async (req: any, res) => {
 
 router.post("/windsor", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
     const { apiKey } = req.body;
 
     if (!apiKey) {
@@ -167,7 +167,7 @@ router.post("/windsor", requireAuth, async (req: any, res) => {
 
 router.delete("/windsor", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
 
     const [connection] = await db.select()
       .from(windsorConnectionsTable)
@@ -190,7 +190,7 @@ router.delete("/windsor", requireAuth, async (req: any, res) => {
 
 router.post("/windsor/sync", requireAuth, async (req: any, res) => {
   try {
-    const { orgId } = (req.session as any).user;
+    const { orgId } = req.dbUser;
 
     const [connection] = await db.select()
       .from(windsorConnectionsTable)
