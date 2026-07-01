@@ -12,6 +12,7 @@ import {
 import { useGetMe } from "@workspace/api-client-react";
 import { useAuth, useUser } from "@clerk/expo";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -191,10 +192,17 @@ export default function SettingsScreen() {
         <SettingRow icon="briefcase" label="Organization" value={orgName} colors={colors} />
       </View>
 
-      <Text style={[s.sectionLabel, { color: colors.mutedForeground }]}>Integrations</Text>
+      <Text style={[s.sectionLabel, { color: colors.mutedForeground }]}>Analytics & Reports</Text>
       <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <SettingRow icon="link" label="Windsor.ai" value="Connected" colors={colors} />
-        <SettingRow icon="refresh-cw" label="Last Sync" value={meData?.lastSync ? "Recent" : "Never"} colors={colors} />
+        <SettingRow icon="bar-chart-2" label="Analytics" colors={colors} onPress={() => router.push("/analytics")} />
+        <SettingRow icon="git-merge" label="Attribution" colors={colors} onPress={() => router.push("/attribution")} />
+        <SettingRow icon="file-text" label="Reports" colors={colors} onPress={() => router.push("/reports")} />
+      </View>
+
+      <Text style={[s.sectionLabel, { color: colors.mutedForeground }]}>Data & Integrations</Text>
+      <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingRow icon="users" label="CRM Leads" colors={colors} onPress={() => router.push("/crm")} />
+        <SettingRow icon="link" label="Integrations" colors={colors} onPress={() => router.push("/integrations")} />
       </View>
 
       <Text style={[s.sectionLabel, { color: colors.mutedForeground }]}>About</Text>

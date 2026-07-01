@@ -1,1 +1,2 @@
 - [PerformanceOS AI architecture](pmos-architecture.md) — Clerk auth, Windsor mock data, Athena chat, Vite proxy, DB migration gotchas
+- [Expo mobile auth wiring](expo-auth-wiring.md) — Clerk JIT-provisioning needs `passwordHash:""` in requireAuth.ts; setAuthTokenGetter must run inside ClerkLoaded.

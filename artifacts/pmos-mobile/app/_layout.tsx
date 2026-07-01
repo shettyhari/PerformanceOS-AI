@@ -55,9 +55,14 @@ function RootLayoutNav() {
   return (
     <>
       <AuthTokenSetup />
-      <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        <Stack.Screen name="analytics" options={{ headerShown: false }} />
+        <Stack.Screen name="attribution" options={{ headerShown: false }} />
+        <Stack.Screen name="reports" options={{ headerShown: false }} />
+        <Stack.Screen name="crm" options={{ headerShown: false }} />
+        <Stack.Screen name="integrations" options={{ headerShown: false }} />
       </Stack>
     </>
   );
