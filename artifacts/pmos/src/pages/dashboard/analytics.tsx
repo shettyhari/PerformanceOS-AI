@@ -2,11 +2,15 @@ import React from "react";
 import { useGetAnalyticsData } from "@workspace/api-client-react";
 import { OnboardingPanel } from "@/components/dashboard/onboarding";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
+import { BudgetInsights } from "@/components/dashboard/budget-insights";
+import { AdAccountFunds } from "@/components/dashboard/ad-account-funds";
 import { DollarSign, Percent, TrendingUp } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { useDateRange } from "@/store/dateRange";
 
 export default function AnalyticsPage() {
   const { data, isLoading, error } = useGetAnalyticsData();
+  const { preset, from, to } = useDateRange();
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><div className="flex items-center gap-3 text-neutral-400 text-sm"><div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />Loading analytics...</div></div>;
@@ -16,7 +20,13 @@ export default function AnalyticsPage() {
 
   const { timeSeries, campaigns, platformsSummary } = data as any;
 
+  const days = preset === "7d" ? 7 : preset === "14d" ? 14 : preset === "90d" ? 90 : 30;
+  const filteredTimeSeries = timeSeries?.slice(-days) ?? [];
+
   const formatCurrency = (val: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
+  const dateLabel = preset === "custom"
+    ? `${from.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${to.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : `Last ${days} days`;
 
   const totalSpend = platformsSummary?.reduce((s: number, p: any) => s + p.spend, 0) || 0;
   const totalRevenue = platformsSummary?.reduce((s: number, p: any) => s + p.revenue, 0) || 0;
@@ -26,7 +36,7 @@ export default function AnalyticsPage() {
     <div className="space-y-8 pb-12">
       <div>
         <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-neutral-100 to-neutral-400 bg-clip-text text-transparent">Multi-Channel Analytics</h1>
-        <p className="text-neutral-400 text-sm mt-1.5 font-light">Cross-platform performance overview for the last 30 days.</p>
+        <p className="text-neutral-400 text-sm mt-1.5 font-light">Cross-platform performance overview · <span className="text-purple-400">{dateLabel}</span></p>
       </div>
 
       {/* Summary cards */}
@@ -44,12 +54,12 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Time Series Chart */}
-      {timeSeries && timeSeries.length > 0 && (
+      {filteredTimeSeries && filteredTimeSeries.length > 0 && (
         <div className="glass-card rounded-[24px] p-6 border border-white/5 bg-white/[0.01]">
-          <h3 className="font-medium text-sm text-white mb-4">Spend vs Revenue (30 Days)</h3>
+          <h3 className="font-medium text-sm text-white mb-4">Spend vs Revenue · {dateLabel}</h3>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timeSeries}>
+              <AreaChart data={filteredTimeSeries}>
                 <defs>
                   <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
@@ -89,6 +99,12 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
+
+      {/* Ad Account Funds */}
+      {platformsSummary && <AdAccountFunds platformsSummary={platformsSummary} />}
+
+      {/* AI Budget Insights */}
+      {platformsSummary && <BudgetInsights platformsSummary={platformsSummary} />}
 
       {/* Campaigns Table */}
       <div>

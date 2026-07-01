@@ -1,18 +1,29 @@
 import React, { useState } from "react";
 import { useGetMe } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { motion } from "framer-motion";
-import { User, Building, Lock, Shield, Bell, Save } from "lucide-react";
+import { User, Building, Bell, Save, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { AlertThresholds } from "@/components/dashboard/alert-thresholds";
+import { LLMConnector } from "@/components/dashboard/llm-connector";
+import { TeamMembers } from "@/components/dashboard/team-members";
 
 export default function SettingsPage() {
   const { data: user } = useGetMe();
+  const { user: clerkUser } = useUser();
   const [saved, setSaved] = useState(false);
+
+  const dbUser = user as any;
+  const userName = dbUser?.name || clerkUser?.fullName || clerkUser?.firstName || "";
+  const userEmail = dbUser?.email || clerkUser?.emailAddresses?.[0]?.emailAddress || "";
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
+
+  const cardClass = "glass-card rounded-[24px] p-6 border border-white/5 bg-white/[0.01] space-y-5";
 
   return (
     <div className="space-y-8 pb-12 max-w-3xl">
@@ -21,12 +32,12 @@ export default function SettingsPage() {
           Workspace Settings
         </h1>
         <p className="text-neutral-400 text-sm mt-1.5 font-light">
-          Manage your account, organization, and notification preferences.
+          Manage your account, organization, team, and AI preferences.
         </p>
       </div>
 
       {/* Profile */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-[24px] p-6 border border-white/5 bg-white/[0.01] space-y-5">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={cardClass}>
         <div className="flex items-center gap-2 mb-2">
           <User className="w-4 h-4 text-neutral-400" />
           <h3 className="text-sm font-semibold text-white">Profile Information</h3>
@@ -35,11 +46,11 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-neutral-400 mb-1.5 font-light">Full Name</label>
-              <input type="text" defaultValue={(user as any)?.name || ""} className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 focus:border-purple-500/40 text-sm text-white outline-none" />
+              <input type="text" defaultValue={userName} className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 focus:border-purple-500/40 text-sm text-white outline-none" />
             </div>
             <div>
               <label className="block text-xs text-neutral-400 mb-1.5 font-light">Email Address</label>
-              <input type="email" defaultValue={(user as any)?.email || ""} disabled className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 text-sm text-neutral-500 outline-none cursor-not-allowed" />
+              <input type="email" defaultValue={userEmail} disabled className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 text-sm text-neutral-500 outline-none cursor-not-allowed" />
             </div>
           </div>
           <button type="submit" className="flex items-center gap-2 px-5 py-2.5 rounded-[12px] bg-white text-black text-xs font-medium hover:bg-neutral-200 active:scale-95 transition cursor-pointer">
@@ -50,7 +61,7 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Organization */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-[24px] p-6 border border-white/5 bg-white/[0.01] space-y-5">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className={cardClass}>
         <div className="flex items-center gap-2 mb-2">
           <Building className="w-4 h-4 text-neutral-400" />
           <h3 className="text-sm font-semibold text-white">Organization</h3>
@@ -58,17 +69,17 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-neutral-400 mb-1.5 font-light">Organization Name</label>
-            <input type="text" defaultValue={(user as any)?.orgName || ""} disabled className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 text-sm text-neutral-500 outline-none cursor-not-allowed" />
+            <input type="text" defaultValue={dbUser?.orgName || ""} disabled className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 text-sm text-neutral-500 outline-none cursor-not-allowed" />
           </div>
           <div>
             <label className="block text-xs text-neutral-400 mb-1.5 font-light">Your Role</label>
-            <input type="text" value={(user as any)?.role || ""} disabled className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 text-sm text-neutral-500 outline-none cursor-not-allowed" />
+            <input type="text" value={dbUser?.role || ""} disabled className="w-full px-4 py-2.5 rounded-[12px] bg-white/[0.02] border border-white/5 text-sm text-neutral-500 outline-none cursor-not-allowed" />
           </div>
         </div>
       </motion.div>
 
       {/* Appearance */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-[24px] p-6 border border-white/5 bg-white/[0.01] space-y-5">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={cardClass}>
         <div className="flex items-center gap-2 mb-2">
           <Shield className="w-4 h-4 text-neutral-400" />
           <h3 className="text-sm font-semibold text-white">Appearance</h3>
@@ -83,14 +94,14 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Notifications */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-[24px] p-6 border border-white/5 bg-white/[0.01] space-y-5">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className={cardClass}>
         <div className="flex items-center gap-2 mb-2">
           <Bell className="w-4 h-4 text-neutral-400" />
           <h3 className="text-sm font-semibold text-white">Alert Preferences</h3>
         </div>
         {[
-          { label: "Critical ROAS drops", desc: "Notify when a campaign falls below 1x ROAS", defaultChecked: true },
-          { label: "Performance warnings", desc: "Notify when ROAS is below the 1.5x target", defaultChecked: true },
+          { label: "Critical ROAS drops", desc: "Notify when a campaign falls below your critical threshold", defaultChecked: true },
+          { label: "Performance warnings", desc: "Notify when ROAS is below your warning threshold", defaultChecked: true },
           { label: "AI Recommendations", desc: "Receive daily optimization suggestions from Athena", defaultChecked: false },
           { label: "Weekly performance digest", desc: "Weekly email summary of your best and worst performers", defaultChecked: false },
         ].map((item) => (
@@ -105,6 +116,21 @@ export default function SettingsPage() {
             </label>
           </div>
         ))}
+      </motion.div>
+
+      {/* Custom Alert Thresholds */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <AlertThresholds />
+      </motion.div>
+
+      {/* Team Members */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <TeamMembers currentUserEmail={userEmail} />
+      </motion.div>
+
+      {/* LLM Connector */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <LLMConnector />
       </motion.div>
     </div>
   );

@@ -1,11 +1,12 @@
 import React from "react";
-import { useGetMe, useGetDashboardSummary } from "@workspace/api-client-react";
+import { useGetMe, useGetDashboardSummary, useGetAnalyticsData } from "@workspace/api-client-react";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { OnboardingPanel } from "@/components/dashboard/onboarding";
 
 export default function DashboardPage() {
   const { data: user } = useGetMe();
   const { data, isLoading, error } = useGetDashboardSummary();
+  const { data: analyticsData } = useGetAnalyticsData();
 
   if (isLoading) {
     return (
@@ -22,5 +23,5 @@ export default function DashboardPage() {
     return <OnboardingPanel />;
   }
 
-  return <DashboardView data={data as any} userName={(user as any)?.name || "User"} />;
+  return <DashboardView data={data as any} userName={(user as any)?.name || "User"} analyticsData={analyticsData as any} />;
 }

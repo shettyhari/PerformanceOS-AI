@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/shared/sidebar";
 import { Navbar } from "@/components/shared/navbar";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user: clerkUser } = useUser();
   const { data: user, isLoading: isMeLoading } = useGetMe();
 
   if (!isLoaded || isMeLoading) {
@@ -24,11 +24,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <Redirect to="/sign-in" />;
   }
 
+  const dbUser = user as any;
+  const userName =
+    dbUser?.name ||
+    clerkUser?.fullName ||
+    clerkUser?.firstName ||
+    clerkUser?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ||
+    "User";
+
   return (
     <div className="flex h-screen w-screen bg-[#050508] overflow-hidden font-sans">
-      <Sidebar user={user as any || {}} />
+      <Sidebar user={dbUser || {}} />
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <Navbar orgName={(user as any)?.orgName || "Workspace"} role={(user as any)?.role || "OWNER"} />
+        <Navbar
+          orgName={dbUser?.orgName || "Workspace"}
+          role={dbUser?.role || "OWNER"}
+          userName={userName}
+        />
         <main className="flex-1 overflow-y-auto bg-[#07070a] p-6 relative">
           <div className="absolute top-[-30%] right-[-10%] w-[500px] h-[500px] rounded-full bg-blue-900/10 blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-purple-900/10 blur-[120px] pointer-events-none" />

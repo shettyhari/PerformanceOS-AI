@@ -1,7 +1,33 @@
 import React, { useState, useMemo } from "react";
-import { Search, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Search, ArrowDown, ArrowUp, ArrowUpDown, Download } from "lucide-react";
 
 interface CampaignRow { id: string; name: string; platform: string; spend: number; revenue: number; roas: number; conversions: number; clicks: number; impressions: number; }
+
+function exportToCsv(rows: CampaignRow[]) {
+  const headers = ["Campaign", "Platform", "Spend", "Revenue", "ROAS", "Conversions", "Clicks", "Impressions"];
+  const lines = [
+    headers.join(","),
+    ...rows.map((r) =>
+      [
+        `"${r.name}"`,
+        r.platform,
+        r.spend.toFixed(2),
+        r.revenue.toFixed(2),
+        r.roas.toFixed(2),
+        r.conversions,
+        r.clicks,
+        r.impressions,
+      ].join(",")
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `campaigns-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function CampaignsTable({ campaigns }: { campaigns: CampaignRow[] }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -49,6 +75,13 @@ export function CampaignsTable({ campaigns }: { campaigns: CampaignRow[] }) {
         <select value={platformFilter} onChange={(e) => { setPlatformFilter(e.target.value); setCurrentPage(1); }} className="px-3 py-2 rounded-[12px] bg-white/[0.02] border border-white/5 text-xs text-neutral-300 outline-none focus:border-white/10">
           {platforms.map((p) => <option key={p} value={p} className="bg-neutral-900">{p === "ALL" ? "All Platforms" : p.replace("_", " ")}</option>)}
         </select>
+        <button
+          onClick={() => exportToCsv(processed)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-[12px] bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 hover:text-white transition text-xs text-neutral-400 cursor-pointer whitespace-nowrap"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
+        </button>
       </div>
 
       <div className="glass-card rounded-[24px] border border-white/5 bg-white/[0.01] overflow-hidden">

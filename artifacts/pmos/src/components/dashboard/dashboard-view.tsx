@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Sparkles, TrendingUp, TrendingDown, AlertCircle, Award, Percent, DollarSign, Target, MousePointer, Activity } from "lucide-react";
 import { Sparkline } from "@/components/charts/sparkline";
+import { GoalsWidget } from "@/components/dashboard/goals-widget";
 
 interface KPIs { spend: number; revenue: number; roas: number; cpa: number; cpl: number; ctr: number; cpc: number; cpm: number; leads: number; conversions: number; }
 interface CampaignIssue { id: string; name: string; platform: string; spend: number; roas: number; issue: string; }
@@ -11,9 +12,10 @@ interface CampaignRow { id: string; name: string; platform: string; spend: numbe
 interface DashboardViewProps {
   data: { kpis: KPIs; needsAttention: CampaignIssue[]; opportunities: CampaignOpportunity[]; topPerformers: CampaignRow[]; executiveSummary: string; aiRecommendations: string[]; };
   userName: string;
+  analyticsData?: any;
 }
 
-export function DashboardView({ data, userName }: DashboardViewProps) {
+export function DashboardView({ data, userName, analyticsData }: DashboardViewProps) {
   const { kpis, needsAttention, opportunities, executiveSummary, aiRecommendations } = data;
 
   const formatCurrency = (val: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
@@ -127,6 +129,9 @@ export function DashboardView({ data, userName }: DashboardViewProps) {
           ))}
         </ul>
       </motion.div>
+
+      {/* Goals Widget */}
+      <GoalsWidget analyticsData={analyticsData} />
 
       {/* KPI Grid */}
       <div>
