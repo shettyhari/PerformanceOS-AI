@@ -71,8 +71,9 @@ See [docs/DATABASE.md](docs/DATABASE.md).
 | 4 | Infrastructure | ✅ |
 | 5 | Authentication | ✅ |
 | 6 | Integrations (Windsor) | ✅ |
-| 7 | Dashboard | Next |
-| 8 | Athena AI + MCP | Pending |
+| 7 | Dashboard | ✅ |
+| 8 | Athena AI + MCP | ✅ |
+| 9 | Reporting | Next |
 | 9 | Reporting | Pending |
 | 10 | Deployment | Pending |
 

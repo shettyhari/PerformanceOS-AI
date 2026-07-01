@@ -3,9 +3,13 @@
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import {
+  BarChart3,
+  Brain,
   ChevronDown,
+  Crown,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -16,6 +20,10 @@ import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { href: '/dashboard/campaigns', label: 'Campaigns', icon: Megaphone },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/dashboard/executive', label: 'Executive', icon: Crown },
+  { href: '/dashboard/athena', label: 'Athena AI', icon: Brain },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ] as const;
 

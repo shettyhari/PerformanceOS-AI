@@ -1,56 +1,30 @@
-import { BarChart3, Brain, TrendingUp, Zap } from 'lucide-react';
+import {
+  DollarSign,
+  MousePointerClick,
+  Target,
+  TrendingUp,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  MetricCard,
+  formatMetricValue,
+} from '@/components/charts/metric-card';
+import {
+  ChannelSpendChart,
+  SpendRevenueChart,
+} from '@/components/charts/metric-charts';
 import { requireAuthContext } from '@/lib/auth/session';
-import { prisma } from '@/lib/db/prisma';
+import { analyticsService } from '@/server/services';
 
 export default async function DashboardPage() {
   const auth = await requireAuthContext();
+  const period = '30d' as const;
 
-  const [memberCount, teamCount, campaignCount, windsorConnection] =
-    await Promise.all([
-    prisma.organizationMember.count({
-      where: { organizationId: auth.organizationId },
-    }),
-    prisma.team.count({
-      where: { organizationId: auth.organizationId, deletedAt: null },
-    }),
-    prisma.campaign.count({
-      where: { organizationId: auth.organizationId },
-    }),
-    prisma.windsorConnection.findFirst({
-      where: { organizationId: auth.organizationId, isActive: true },
-      select: { lastSyncAt: true, healthStatus: true },
-    }),
+  const [summary, daily, channels] = await Promise.all([
+    analyticsService.getDashboardSummary(auth.organizationId, period),
+    analyticsService.getDailyMetrics(auth.organizationId, period),
+    analyticsService.getChannelMetrics(auth.organizationId, period),
   ]);
-
-  const stats = [
-    {
-      title: 'Team Members',
-      value: memberCount.toString(),
-      icon: Zap,
-      description: 'Active organization members',
-    },
-    {
-      title: 'Teams',
-      value: teamCount.toString(),
-      icon: BarChart3,
-      description: 'Configured teams',
-    },
-    {
-      title: 'Campaigns',
-      value: campaignCount.toString(),
-      icon: TrendingUp,
-      description: windsorConnection
-        ? `Last sync: ${windsorConnection.lastSyncAt ? new Date(windsorConnection.lastSyncAt).toLocaleDateString() : 'Pending'}`
-        : 'Connect Windsor.ai to sync',
-    },
-    {
-      title: 'Athena AI',
-      value: 'Ready',
-      icon: Brain,
-      description: 'AI assistant available',
-    },
-  ];
 
   return (
     <div className="space-y-8">
@@ -59,39 +33,72 @@ export default async function DashboardPage() {
           Welcome back{auth.name ? `, ${auth.name.split(' ')[0]}` : ''}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Your marketing command center for {auth.organizationSlug}
+          Marketing overview · Last 30 days
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="glass border-0">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <MetricCard
+          title="Total Spend"
+          value={formatMetricValue('currency', summary.spend)}
+          icon={DollarSign}
+          subtitle={`${summary.campaignCount} campaigns`}
+        />
+        <MetricCard
+          title="Revenue"
+          value={formatMetricValue('currency', summary.revenue)}
+          icon={TrendingUp}
+          subtitle={formatMetricValue('roas', summary.roas) + ' ROAS'}
+        />
+        <MetricCard
+          title="Conversions"
+          value={formatMetricValue('number', summary.conversions)}
+          icon={Target}
+          subtitle={formatMetricValue('currency', summary.cpa) + ' CPA'}
+        />
+        <MetricCard
+          title="Clicks"
+          value={formatMetricValue('number', summary.clicks)}
+          icon={MousePointerClick}
+          subtitle={formatMetricValue('percent', summary.ctr) + ' CTR'}
+        />
       </div>
 
-      <Card className="glass border-0">
-        <CardHeader>
-          <CardTitle>Getting Started</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            1. Connect your Windsor.ai account in Settings → Integrations
-          </p>
-          <p>2. Run your first data sync to populate campaign metrics</p>
-          <p>3. Ask Athena AI for insights, forecasts, and recommendations</p>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="glass border-0 lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Spend vs Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {daily.length > 0 ? (
+              <SpendRevenueChart data={daily} />
+            ) : (
+              <EmptyChart message="Sync Windsor.ai to see performance trends" />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="glass border-0">
+          <CardHeader>
+            <CardTitle>Spend by Channel</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {channels.length > 0 ? (
+              <ChannelSpendChart data={channels} />
+            ) : (
+              <EmptyChart message="No channel data yet" />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function EmptyChart({ message }: { message: string }) {
+  return (
+    <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+      {message}
     </div>
   );
 }

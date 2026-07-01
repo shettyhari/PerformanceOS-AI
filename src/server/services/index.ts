@@ -7,6 +7,8 @@ import { windsorConnectionRepository } from '@/server/repositories/prisma/windso
 import { campaignRepository } from '@/server/repositories/prisma/campaign.repository';
 import { AuthService } from '@/server/services/auth.service';
 import { WindsorService } from '@/server/services/windsor.service';
+import { AnalyticsService } from '@/server/services/analytics.service';
+import { AthenaService } from '@/server/services/athena.service';
 
 export const authService = new AuthService(
   userRepository,
@@ -19,3 +21,6 @@ export const windsorService = new WindsorService(
   campaignRepository,
   auditRepository,
 );
+
+export const analyticsService = new AnalyticsService();
+export const athenaService = new AthenaService();
