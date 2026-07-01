@@ -1,0 +1,786 @@
+// PerformanceOS AI — Prisma Schema
+// PostgreSQL · Multi-tenant · Production-ready
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  ANALYST
+  VIEWER
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  PAUSED
+}
+
+enum WindsorSyncStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum WindsorHealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+}
+
+enum CampaignStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+  UNKNOWN
+}
+
+enum ReportFormat {
+  PDF
+  EXCEL
+  POWERPOINT
+  CSV
+}
+
+enum ReportStatus {
+  DRAFT
+  GENERATING
+  COMPLETED
+  FAILED
+  SCHEDULED
+}
+
+enum DeliveryChannel {
+  EMAIL
+  WHATSAPP
+  TELEGRAM
+  DOWNLOAD
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum IntegrationProvider {
+  WINDSOR
+  GOOGLE
+  FACEBOOK
+  LINKEDIN
+  MICROSOFT
+  HUBSPOT
+  SALESFORCE
+  CUSTOM
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  PENDING
+}
+
+enum NotificationType {
+  ALERT
+  REPORT
+  TASK
+  COMMENT
+  SYSTEM
+  ATHENA
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  SYNC
+  CONNECT
+  DISCONNECT
+}
+
+enum CrmDealStage {
+  LEAD
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum AthenaMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+// ─── Auth (NextAuth compatible) ──────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  accounts              Account[]
+  sessions              Session[]
+  organizationMembers   OrganizationMember[]
+  teamMembers           TeamMember[]
+  tasksAssigned         Task[]               @relation("TaskAssignee")
+  tasksCreated          Task[]               @relation("TaskCreator")
+  comments              Comment[]
+  notifications         Notification[]
+  athenaConversations   AthenaConversation[]
+  auditLogs             AuditLog[]
+  activityLogs          ActivityLog[]
+
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Multi-tenancy ───────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  domain    String?
+  timezone  String   @default("UTC")
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // White-label
+  brandPrimaryColor   String?
+  brandSecondaryColor String?
+  customDomain        String?
+
+  members            OrganizationMember[]
+  teams              Team[]
+  subscription       Subscription?
+  windsorConnections WindsorConnection[]
+  campaigns          Campaign[]
+  campaignMetrics    CampaignMetric[]
+  integrations       Integration[]
+  reports            Report[]
+  reportSchedules    ReportSchedule[]
+  alerts             Alert[]
+  notifications      Notification[]
+  tasks              Task[]
+  comments           Comment[]
+  activityLogs       ActivityLog[]
+  auditLogs          AuditLog[]
+  crmContacts        CrmContact[]
+  crmDeals           CrmDeal[]
+  athenaConversations AthenaConversation[]
+  forecasts          Forecast[]
+
+  @@index([slug])
+  @@index([deletedAt])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           UserRole @default(VIEWER)
+  invitedAt      DateTime @default(now())
+  joinedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, role])
+  @@map("organization_members")
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      TeamMember[]
+
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  organizationId       String             @unique
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(TRIALING)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  trialEndsAt          DateTime?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([stripeCustomerId])
+  @@map("subscriptions")
+}
+
+// ─── Windsor.ai Integration ──────────────────────────────────────────────────
+
+model WindsorConnection {
+  id               String              @id @default(cuid())
+  organizationId   String
+  name             String
+  workspaceId      String?
+  encryptedApiKey  String              @db.Text
+  encryptionIv     String
+  encryptionTag    String
+  isActive         Boolean             @default(true)
+  healthStatus     WindsorHealthStatus @default(UNKNOWN)
+  lastHealthCheck  DateTime?
+  lastSyncAt       DateTime?
+  syncIntervalMin  Int                 @default(60)
+  autoSyncEnabled  Boolean             @default(true)
+  config           Json                @default("{}")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  syncJobs      WindsorSyncJob[]
+  connectionLogs WindsorConnectionLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+  @@map("windsor_connections")
+}
+
+model WindsorSyncJob {
+  id           String            @id @default(cuid())
+  connectionId String
+  status       WindsorSyncStatus @default(PENDING)
+  jobType      String            @default("full")
+  startedAt    DateTime?
+  completedAt  DateTime?
+  recordsProcessed Int           @default(0)
+  errorMessage String?           @db.Text
+  metadata     Json              @default("{}")
+  retryCount   Int               @default(0)
+  maxRetries   Int               @default(3)
+  scheduledAt  DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  connection WindsorConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, status])
+  @@index([status, scheduledAt])
+  @@map("windsor_sync_jobs")
+}
+
+model WindsorConnectionLog {
+  id           String   @id @default(cuid())
+  connectionId String
+  level        String   @default("info")
+  message      String   @db.Text
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  connection WindsorConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, createdAt(sort: Desc)])
+  @@map("windsor_connection_logs")
+}
+
+// ─── Campaigns & Metrics ─────────────────────────────────────────────────────
+
+model Campaign {
+  id               String         @id @default(cuid())
+  organizationId   String
+  externalId       String
+  source           String
+  name             String
+  status           CampaignStatus @default(UNKNOWN)
+  channel          String?
+  platform         String?
+  budget           Decimal?       @db.Decimal(18, 4)
+  currency         String         @default("USD")
+  startDate        DateTime?
+  endDate          DateTime?
+  metadata         Json           @default("{}")
+  lastSyncedAt     DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  metrics      CampaignMetric[]
+
+  @@unique([organizationId, externalId, source])
+  @@index([organizationId, status])
+  @@index([organizationId, channel])
+  @@map("campaigns")
+}
+
+model CampaignMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  campaignId     String
+  date           DateTime @db.Date
+  impressions    BigInt   @default(0)
+  clicks         BigInt   @default(0)
+  spend          Decimal  @default(0) @db.Decimal(18, 4)
+  conversions    Decimal  @default(0) @db.Decimal(18, 4)
+  revenue        Decimal  @default(0) @db.Decimal(18, 4)
+  roas           Decimal? @db.Decimal(10, 4)
+  cpa            Decimal? @db.Decimal(18, 4)
+  ctr            Decimal? @db.Decimal(10, 6)
+  cpc            Decimal? @db.Decimal(18, 4)
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, campaignId, date])
+  @@index([organizationId, date(sort: Desc)])
+  @@index([campaignId, date(sort: Desc)])
+  @@map("campaign_metrics")
+}
+
+model Forecast {
+  id             String   @id @default(cuid())
+  organizationId String
+  metricType     String
+  channel        String?
+  forecastDate   DateTime @db.Date
+  predictedValue Decimal  @db.Decimal(18, 4)
+  lowerBound     Decimal? @db.Decimal(18, 4)
+  upperBound     Decimal? @db.Decimal(18, 4)
+  confidence     Decimal? @db.Decimal(5, 4)
+  model          String   @default("gemini")
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, metricType, forecastDate])
+  @@map("forecasts")
+}
+
+// ─── Integrations ────────────────────────────────────────────────────────────
+
+model Integration {
+  id               String              @id @default(cuid())
+  organizationId   String
+  provider         IntegrationProvider
+  name             String
+  status           IntegrationStatus   @default(PENDING)
+  encryptedCredentials String?         @db.Text
+  encryptionIv     String?
+  encryptionTag    String?
+  config           Json                @default("{}")
+  lastSyncAt       DateTime?
+  errorMessage     String?             @db.Text
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, provider])
+  @@map("integrations")
+}
+
+// ─── CRM ─────────────────────────────────────────────────────────────────────
+
+model CrmContact {
+  id             String    @id @default(cuid())
+  organizationId String
+  externalId     String?
+  email          String?
+  firstName      String?
+  lastName       String?
+  phone          String?
+  company        String?
+  title          String?
+  source         String?
+  tags           String[]  @default([])
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deals        CrmDeal[]
+
+  @@index([organizationId, email])
+  @@index([organizationId, deletedAt])
+  @@map("crm_contacts")
+}
+
+model CrmDeal {
+  id             String       @id @default(cuid())
+  organizationId String
+  contactId      String?
+  name           String
+  value          Decimal?     @db.Decimal(18, 4)
+  currency       String       @default("USD")
+  stage          CrmDealStage @default(LEAD)
+  probability    Int?
+  expectedClose  DateTime?
+  source         String?
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      CrmContact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, stage])
+  @@index([organizationId, deletedAt])
+  @@map("crm_deals")
+}
+
+// ─── Reports ─────────────────────────────────────────────────────────────────
+
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  format         ReportFormat
+  status         ReportStatus @default(DRAFT)
+  template       String?
+  filters        Json         @default("{}")
+  fileUrl        String?
+  fileSize       Int?
+  generatedAt    DateTime?
+  errorMessage   String?      @db.Text
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  schedules    ReportSchedule[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, deletedAt])
+  @@map("reports")
+}
+
+model ReportSchedule {
+  id             String            @id @default(cuid())
+  organizationId String
+  reportId       String?
+  name           String
+  cronExpression String
+  format         ReportFormat
+  filters        Json              @default("{}")
+  deliveryChannels DeliveryChannel[] @default([EMAIL])
+  recipients     String[]          @default([])
+  isActive       Boolean           @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report       Report?      @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, isActive])
+  @@index([nextRunAt, isActive])
+  @@map("report_schedules")
+}
+
+// ─── Alerts & Notifications ──────────────────────────────────────────────────
+
+model Alert {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  metricType     String
+  condition      String
+  threshold      Decimal       @db.Decimal(18, 4)
+  severity       AlertSeverity @default(WARNING)
+  status         AlertStatus   @default(ACTIVE)
+  channel        String?
+  lastTriggered  DateTime?
+  metadata       Json          @default("{}")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("alerts")
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  type           NotificationType
+  title          String
+  body           String           @db.Text
+  link           String?
+  isRead         Boolean          @default(false)
+  metadata       Json             @default("{}")
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ─── Tasks & Comments ────────────────────────────────────────────────────────
+
+model Task {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  description    String?      @db.Text
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  assigneeId     String?
+  creatorId      String
+  dueDate        DateTime?
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator      User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  comments     Comment[]
+
+  @@index([organizationId, status])
+  @@index([assigneeId])
+  @@index([organizationId, deletedAt])
+  @@map("tasks")
+}
+
+model Comment {
+  id             String   @id @default(cuid())
+  organizationId String
+  taskId         String?
+  userId         String
+  content        String   @db.Text
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("comments")
+}
+
+// ─── Athena AI ───────────────────────────────────────────────────────────────
+
+model AthenaConversation {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  title          String?
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     AthenaMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([organizationId, updatedAt(sort: Desc)])
+  @@map("athena_conversations")
+}
+
+model AthenaMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  role           AthenaMessageRole
+  content        String            @db.Text
+  toolCalls      Json?
+  toolResults    Json?
+  tokenCount     Int?
+  metadata       Json              @default("{}")
+  createdAt      DateTime          @default(now())
+
+  conversation AthenaConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("athena_messages")
+}
+
+// ─── Audit & Activity ────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         AuditAction
+  resourceType   String
+  resourceId     String?
+  metadata       Json        @default("{}")
+  ipAddress      String?
+  userAgent      String?     @db.Text
+  createdAt      DateTime    @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
+
+model ActivityLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String?
+  description    String   @db.Text
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
