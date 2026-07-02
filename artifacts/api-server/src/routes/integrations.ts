@@ -33,55 +33,102 @@ function decrypt(text: string): string {
   return decrypted;
 }
 
-async function generateMockCampaignData(orgId: string): Promise<number> {
-  const platforms = ["GOOGLE_ADS", "META_ADS", "LINKEDIN_ADS", "MICROSOFT_ADS"];
-  const campaigns = [
-    { id: "camp_001", name: "Brand Awareness - Google", platform: "GOOGLE_ADS", baseSpend: 450, baseRevenue: 1800 },
-    { id: "camp_002", name: "Lead Gen - Meta", platform: "META_ADS", baseSpend: 320, baseRevenue: 640 },
-    { id: "camp_003", name: "Retargeting - Meta", platform: "META_ADS", baseSpend: 180, baseRevenue: 810 },
-    { id: "camp_004", name: "B2B Outreach - LinkedIn", platform: "LINKEDIN_ADS", baseSpend: 600, baseRevenue: 900 },
-    { id: "camp_005", name: "Search - Google Performance Max", platform: "GOOGLE_ADS", baseSpend: 520, baseRevenue: 2340 },
-    { id: "camp_006", name: "Display - Microsoft Ads", platform: "MICROSOFT_ADS", baseSpend: 120, baseRevenue: 96 },
-    { id: "camp_007", name: "Conversion - Meta Advantage+", platform: "META_ADS", baseSpend: 280, baseRevenue: 1120 },
-    { id: "camp_008", name: "Remarketing - Google", platform: "GOOGLE_ADS", baseSpend: 190, baseRevenue: 855 },
-  ];
+// Map Windsor.ai "source" field to our internal platform enum
+function mapSource(source: string): string {
+  const s = (source || "").toLowerCase().trim();
+  if (s.includes("google")) return "GOOGLE_ADS";
+  if (s.includes("facebook") || s.includes("meta") || s.includes("fb_")) return "META_ADS";
+  if (s.includes("linkedin")) return "LINKEDIN_ADS";
+  if (s.includes("bing") || s.includes("microsoft")) return "MICROSOFT_ADS";
+  if (s.includes("tiktok")) return "TIKTOK_ADS";
+  if (s.includes("twitter") || s.includes("x_ads")) return "TWITTER_ADS";
+  if (s.includes("pinterest")) return "PINTEREST_ADS";
+  if (s.includes("snapchat")) return "SNAPCHAT_ADS";
+  return source.toUpperCase().replace(/\s+/g, "_");
+}
 
-  const rows: any[] = [];
-  const today = new Date();
-  
-  for (let daysAgo = 29; daysAgo >= 0; daysAgo--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - daysAgo);
-    const dateStr = date.toISOString().split("T")[0];
+// Fetch real campaign data from Windsor.ai
+async function fetchWindsorData(apiKey: string, dateFrom: string, dateTo: string): Promise<any[]> {
+  const fields = [
+    "date",
+    "campaign",
+    "campaign_id",
+    "source",
+    "clicks",
+    "impressions",
+    "spend",
+    "conversions",
+    "revenue",
+    "leads",
+  ].join(",");
 
-    for (const c of campaigns) {
-      const variance = 0.7 + Math.random() * 0.6;
-      const spend = c.baseSpend * variance / 30;
-      const revenueVariance = 0.8 + Math.random() * 0.4;
-      const revenue = c.baseRevenue * revenueVariance / 30;
-      const impressions = Math.floor(spend * (80 + Math.random() * 40));
-      const clicks = Math.floor(impressions * (0.02 + Math.random() * 0.03));
-      const conversions = Math.floor(clicks * (0.03 + Math.random() * 0.05));
-      const leads = Math.floor(conversions * (0.5 + Math.random()));
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    date_from: dateFrom,
+    date_to: dateTo,
+    fields,
+    _renderer: "json",
+  });
 
-      rows.push({
-        orgId,
-        campaignId: c.id,
-        name: c.name,
-        platform: c.platform,
-        date: dateStr,
-        spend,
-        revenue,
-        impressions,
-        clicks,
-        conversions,
-        leads,
-      });
-    }
+  // Try the main Windsor.ai connectors endpoint
+  const url = `https://connectors.windsor.ai/all?${params.toString()}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Windsor.ai API error ${response.status}: ${body.slice(0, 200)}`);
   }
 
-  await db.insert(campaignMetricsTable).values(rows);
-  return rows.length;
+  const json = await response.json() as any;
+
+  // Windsor.ai returns either { data: [...] } or an array directly
+  if (Array.isArray(json)) return json;
+  if (json?.data && Array.isArray(json.data)) return json.data;
+  if (json?.results && Array.isArray(json.results)) return json.results;
+
+  throw new Error("Windsor.ai returned an unexpected response format");
+}
+
+// Convert Windsor.ai rows into DB rows for a given org
+function buildDbRows(orgId: string, rows: any[]): any[] {
+  const dbRows: any[] = [];
+
+  for (const row of rows) {
+    const dateRaw = row.date || row.Date;
+    if (!dateRaw) continue;
+
+    // Normalise date to YYYY-MM-DD
+    const date = String(dateRaw).slice(0, 10);
+
+    const campaignName = String(row.campaign || row.Campaign || row.campaign_name || "Unknown Campaign").trim();
+    const campaignIdRaw = row.campaign_id || row.campaign_id_external || row.ad_campaign_id;
+    const campaignId = campaignIdRaw
+      ? String(campaignIdRaw)
+      : `${orgId}_${campaignName}_${row.source || "unknown"}`.replace(/\s+/g, "_").slice(0, 128);
+
+    const source = mapSource(String(row.source || row.Source || row.channel || "unknown"));
+
+    dbRows.push({
+      orgId,
+      campaignId,
+      name: campaignName,
+      platform: source,
+      date,
+      spend: Number(row.spend ?? row.cost ?? 0) || 0,
+      revenue: Number(row.revenue ?? row.conversion_value ?? 0) || 0,
+      impressions: Math.round(Number(row.impressions ?? 0) || 0),
+      clicks: Math.round(Number(row.clicks ?? 0) || 0),
+      conversions: Math.round(Number(row.conversions ?? row.all_conversions ?? 0) || 0),
+      leads: Math.round(Number(row.leads ?? 0) || 0),
+    });
+  }
+
+  return dbRows;
 }
 
 router.get("/windsor", requireAuth, async (req: any, res) => {
@@ -125,15 +172,35 @@ router.post("/windsor", requireAuth, async (req: any, res) => {
     const { orgId } = req.dbUser;
     const { apiKey } = req.body;
 
-    if (!apiKey) {
-      return res.status(400).json({ error: "API key required" });
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length < 8) {
+      return res.status(400).json({ error: "A valid Windsor.ai API key is required (minimum 8 characters)." });
     }
 
-    if (apiKey.length < 8) {
-      return res.status(400).json({ error: "Invalid Windsor.ai API Key. Connection failed." });
+    // Validate the key with a lightweight test call (last 1 day, minimal fields)
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().slice(0, 10);
+      const testParams = new URLSearchParams({
+        api_key: apiKey.trim(),
+        date_from: dateStr,
+        date_to: dateStr,
+        fields: "date,campaign,source,spend",
+        _renderer: "json",
+      });
+      const testRes = await fetch(`https://connectors.windsor.ai/all?${testParams.toString()}`, {
+        signal: AbortSignal.timeout(10000),
+        headers: { Accept: "application/json" },
+      });
+      if (testRes.status === 401 || testRes.status === 403) {
+        return res.status(400).json({ error: "Invalid Windsor.ai API key. Please check your key and try again." });
+      }
+    } catch (fetchErr: any) {
+      // If the validation request times out or network is down, still allow saving
+      req.log.warn({ fetchErr }, "Windsor.ai key validation request failed — proceeding anyway");
     }
 
-    const encryptedKey = encrypt(apiKey);
+    const encryptedKey = encrypt(apiKey.trim());
 
     const existing = await db.select()
       .from(windsorConnectionsTable)
@@ -179,6 +246,8 @@ router.delete("/windsor", requireAuth, async (req: any, res) => {
         .where(eq(syncLogsTable.connectionId, connection.id));
       await db.delete(windsorConnectionsTable)
         .where(eq(windsorConnectionsTable.orgId, orgId));
+      await db.delete(campaignMetricsTable)
+        .where(eq(campaignMetricsTable.orgId, orgId));
     }
 
     return res.json({ success: true });
@@ -198,23 +267,76 @@ router.post("/windsor/sync", requireAuth, async (req: any, res) => {
       .limit(1);
 
     if (!connection) {
-      return res.status(400).json({ error: "No connection found" });
+      return res.status(400).json({ error: "No Windsor.ai connection found. Please connect first." });
     }
 
     await db.update(windsorConnectionsTable)
       .set({ syncStatus: "SYNCING" })
       .where(eq(windsorConnectionsTable.orgId, orgId));
 
-    const existingMetrics = await db.select()
-      .from(campaignMetricsTable)
-      .where(eq(campaignMetricsTable.orgId, orgId))
-      .limit(1);
+    let apiKey: string;
+    try {
+      apiKey = decrypt(connection.apiKeyEncrypted);
+    } catch (decryptErr: any) {
+      await db.update(windsorConnectionsTable)
+        .set({ syncStatus: "FAILED" })
+        .where(eq(windsorConnectionsTable.orgId, orgId));
+      await db.insert(syncLogsTable).values({
+        connectionId: connection.id,
+        status: "FAILED",
+        errorMessage: "Failed to decrypt stored API key. Please reconnect your Windsor.ai account.",
+        rowsSynced: 0,
+      });
+      return res.status(500).json({ error: "Failed to decrypt API key. Please reconnect your Windsor.ai account." });
+    }
 
-    let rowsSynced = 0;
-    if (existingMetrics.length === 0) {
-      rowsSynced = await generateMockCampaignData(orgId);
-    } else {
-      rowsSynced = existingMetrics.length;
+    // Fetch last 90 days by default
+    const dateTo = new Date();
+    const dateFrom = new Date();
+    dateFrom.setDate(dateTo.getDate() - 89);
+    const dateFromStr = dateFrom.toISOString().slice(0, 10);
+    const dateToStr = dateTo.toISOString().slice(0, 10);
+
+    let rawRows: any[];
+    try {
+      rawRows = await fetchWindsorData(apiKey, dateFromStr, dateToStr);
+    } catch (apiErr: any) {
+      req.log.error({ apiErr }, "Windsor.ai fetch error");
+      await db.update(windsorConnectionsTable)
+        .set({ syncStatus: "FAILED" })
+        .where(eq(windsorConnectionsTable.orgId, orgId));
+      await db.insert(syncLogsTable).values({
+        connectionId: connection.id,
+        status: "FAILED",
+        errorMessage: apiErr.message || "Windsor.ai API request failed",
+        rowsSynced: 0,
+      });
+      return res.status(502).json({ error: `Windsor.ai sync failed: ${apiErr.message}` });
+    }
+
+    if (!rawRows || rawRows.length === 0) {
+      await db.update(windsorConnectionsTable)
+        .set({ syncStatus: "SYNCED", lastSyncAt: new Date() })
+        .where(eq(windsorConnectionsTable.orgId, orgId));
+      await db.insert(syncLogsTable).values({
+        connectionId: connection.id,
+        status: "SUCCESS",
+        errorMessage: "Windsor.ai returned 0 rows. Make sure at least one data source is connected in your Windsor.ai dashboard.",
+        rowsSynced: 0,
+      });
+      return res.json({ rowsSynced: 0, message: "Sync successful but no data was returned. Check that your ad accounts are connected in Windsor.ai." });
+    }
+
+    const dbRows = buildDbRows(orgId, rawRows);
+
+    // Clear existing metrics for this org before inserting fresh data
+    await db.delete(campaignMetricsTable)
+      .where(eq(campaignMetricsTable.orgId, orgId));
+
+    // Insert in batches of 500 to avoid query size limits
+    const BATCH = 500;
+    for (let i = 0; i < dbRows.length; i += BATCH) {
+      await db.insert(campaignMetricsTable).values(dbRows.slice(i, i + BATCH));
     }
 
     await db.update(windsorConnectionsTable)
@@ -224,13 +346,14 @@ router.post("/windsor/sync", requireAuth, async (req: any, res) => {
     await db.insert(syncLogsTable).values({
       connectionId: connection.id,
       status: "SUCCESS",
-      rowsSynced,
+      rowsSynced: dbRows.length,
     });
 
-    return res.json({ rowsSynced });
+    req.log.info({ orgId, rowsSynced: dbRows.length }, "Windsor.ai sync complete");
+    return res.json({ rowsSynced: dbRows.length });
   } catch (err: any) {
     req.log.error({ err }, "Sync error");
-    return res.status(500).json({ error: "Sync failed" });
+    return res.status(500).json({ error: "Sync failed unexpectedly. Please try again." });
   }
 });
 
