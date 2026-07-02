@@ -357,4 +357,73 @@ router.post("/windsor/sync", requireAuth, async (req: any, res) => {
   }
 });
 
+// ─── Google Ads MCP proxy ─────────────────────────────────────────────────────
+// Forwards JSON-RPC tool calls to the user's self-hosted MCP server so the
+// browser never has to deal with CORS.
+
+router.post("/google-ads-mcp/proxy", requireAuth, async (req: any, res) => {
+  const { mcpUrl, toolName, args } = req.body as {
+    mcpUrl?: string;
+    toolName?: string;
+    args?: Record<string, unknown>;
+  };
+
+  if (!mcpUrl || !toolName) {
+    return res.status(400).json({ error: "mcpUrl and toolName are required" });
+  }
+
+  // Normalise trailing slash
+  const base = mcpUrl.replace(/\/+$/, "");
+  const endpoint = `${base}/mcp`;
+
+  const payload = {
+    jsonrpc: "2.0",
+    id: crypto.randomUUID(),
+    method: "tools/call",
+    params: { name: toolName, arguments: args ?? {} },
+  };
+
+  try {
+    const upstream = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    const text = await upstream.text();
+
+    if (!upstream.ok) {
+      req.log.warn({ status: upstream.status, body: text.slice(0, 400) }, "MCP upstream error");
+      return res.status(502).json({ error: `MCP server responded with ${upstream.status}: ${text.slice(0, 200)}` });
+    }
+
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return res.status(502).json({ error: "MCP server returned non-JSON response", raw: text.slice(0, 400) });
+    }
+
+    // JSON-RPC error
+    if (json.error) {
+      return res.status(400).json({ error: json.error.message ?? JSON.stringify(json.error) });
+    }
+
+    // FastMCP returns result inside json.result.content[0].text (stringified JSON) or directly
+    let result = json.result;
+    if (result?.content?.[0]?.text) {
+      try { result = JSON.parse(result.content[0].text); } catch { result = result.content[0].text; }
+    }
+
+    return res.json({ result });
+  } catch (err: any) {
+    req.log.error({ err }, "Google Ads MCP proxy error");
+    const msg = err.name === "TimeoutError"
+      ? "MCP server timed out. Make sure the Cloud Run service is running."
+      : err.message || "Failed to reach MCP server";
+    return res.status(502).json({ error: msg });
+  }
+});
+
 export default router;
